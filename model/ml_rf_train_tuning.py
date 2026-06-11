@@ -30,14 +30,16 @@ def main():
     
     # 5-Fold(cv=5)를 적용하여 데이터의 편향을 방지
     # 전체 데이터를 5개 조각으로 쪼개어 80%로 학습하고 20%로 평가하는 과정을 5번 반복
+    # 개선 코드: Recall을 극대화하는 파라미터 조합을 찾도록 유도
     grid_search = GridSearchCV(
-        estimator=rf_base,
-        param_grid=param_grid,
-        cv=5, 
-        scoring='f1_macro',
-        n_jobs=-1,
-        verbose=1 # 학습 진행률 트리거 표시
+    estimator=rf_base,
+    param_grid=param_grid,
+    cv=5, 
+    scoring='recall',  # <- 'f1_macro'에서 'recall'로 변경하여 대박작 발굴에 중점을 둠.
+    n_jobs=-1,
+    verbose=1
     )
+   
     
     start_time = time.time()
     grid_search.fit(X_train, y_train)
