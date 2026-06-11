@@ -1,0 +1,48 @@
+data:
+  raw_path: "data/raw/games_march2025_cleaned.csv"
+  processed_dir: "data/processed"
+  keep_text: true   # short_description 유지 (DL 텍스트 실험용)
+
+cleaning:
+  min_total_reviews: 10          # positive+negative 직접 합산 기준
+  min_days_since_release: 180    # 기준일(2025-03-10)에서 너무 최근 출시작 제거
+  price_clip_max: 100.0
+
+labels:
+  hit:
+    owners_lower_threshold: 100000   # owners 구간 하한 ≥ 10만 → 양성 15.6%
+  hidden_gem:
+    positive_ratio_min: 0.85         # positive/(p+n) 직접 계산값
+    owners_upper_threshold: 100000   # hit과 동일값 → 두 라벨 상호배타
+    min_total_reviews: 30
+
+features:
+  top_n_genres: 15
+  top_n_tags: 30
+  top_n_categories: 15
+  leakage_columns:                   # 출시 후 정보 17종 — 물리 제거
+    - "positive"
+    - "negative"
+    - "pct_pos_total"
+    - "num_reviews_total"
+    - "pct_pos_recent"
+    - "num_reviews_recent"
+    - "recommendations"
+    - "peak_ccu"
+    - "estimated_owners"
+    - "average_playtime_forever"
+    - "average_playtime_2weeks"
+    - "median_playtime_forever"
+    - "median_playtime_2weeks"
+    - "user_score"
+    - "score_rank"
+    - "metacritic_score"
+    - "discount"
+
+split:
+  test_size: 0.2
+  random_state: 42
+
+text:
+  tfidf_max_features: 300
+  tfidf_ngram_max: 2
