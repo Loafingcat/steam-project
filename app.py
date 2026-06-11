@@ -20,7 +20,8 @@ st.set_page_config(page_title="Steam ML vs DL | MLOps", page_icon="🎮", layout
 mlflow.set_tracking_uri("sqlite:///mlflow.db")
 
 PAGES = ["1. 파이프라인 현황", "2. 실험 비교", "3. 모델 레지스트리",
-         "4. 실시간 예측 데모", "5. 한계점 & 개선"]
+         "4. 실시간 예측 데모", "5. 숨은 명작 추천", "6. 장르 분석",
+         "7. 한계점 & 개선"]
 page = st.sidebar.radio("페이지", PAGES)
 st.sidebar.markdown("---")
 st.sidebar.caption("전처리 → 학습(MLflow) → champion 등록 → 서빙")
@@ -179,6 +180,135 @@ elif page == PAGES[3]:
     st.progress(min(prob, 1.0))
     st.caption(f"champion: {type(model).__name__} | "
                f"registry: steam_{task}_predictor@champion")
+
+# ═════════ 숨은 명작 추천 ═════════
+elif page == PAGES[4]:
+    st.title("💎 숨은 명작 추천")
+
+    @st.cache_data
+    def load_recommend_data():
+        catalog = pd.read_parquet("data/processed/games_catalog.parquet")
+        X_all = pd.read_parquet("data/processed/X_all_hidden_gem.parquet")
+        return catalog, X_all
+
+    catalog, X_all = load_recommend_data()
+    model = get_champion("hidden_gem")
+
+    # 모델 점수 계산 (전체 게임, 캐싱)
+    @st.cache_data
+    def score_all():
+        return model.predict_proba(X_all)[:, 1]
+    catalog = catalog.copy()
+    catalog["gem_score"] = score_all()
+
+    # ── 필터 UI ──
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        sel_genres = st.multiselect(
+            "장르", ["Indie", "Action", "Adventure", "RPG", "Strategy",
+                    "Casual", "Simulation", "Puzzle"], ["Indie"])
+    with c2:
+        sel_plat = st.multiselect("플랫폼", ["windows", "mac", "linux"], ["windows"])
+    with c3:
+        max_price = st.slider("최대 가격 ($)", 0, 60, 20)
+
+    # ── 필터 적용 ──
+    mask = (catalog["price"] <= max_price)
+    for p in sel_plat:
+        mask &= (catalog[p] == 1)
+    if sel_genres:
+        genre_mask = catalog["genres"].apply(
+            lambda s: any(g in str(s) for g in sel_genres))
+        mask &= genre_mask
+    filtered = catalog[mask]
+
+    # ── 2층 추천 ──
+    tab1, tab2, tab3 = st.tabs(["✅ 확정 숨은 명작", "🔮 잠재 명작 (모델 발굴)",
+                                 "🚨 리뷰 패턴 이상"])
+
+    with tab1:
+        st.caption("긍정률 85%+ · owners 10만 미만 · 리뷰 30+ (검증된 명작)")
+        gems = (filtered[filtered["target_hidden_gem"] == 1]
+                .sort_values("wilson_lb", ascending=False).head(20))
+        st.dataframe(gems[["name", "price", "positive_ratio",
+                           "total_reviews_calc", "release_year"]]
+                     .rename(columns={"positive_ratio": "긍정률",
+                                      "total_reviews_calc": "리뷰수"}),
+                     use_container_width=True, hide_index=True)
+
+    with tab2:
+        st.caption("리뷰가 부족해 라벨을 못 받았지만 모델이 명작 패턴으로 판단한 게임")
+        latent = (filtered[(filtered["target_hidden_gem"] == 0)
+                           & (filtered["total_reviews_calc"] < 30)]
+                  .sort_values("gem_score", ascending=False).head(20))
+        st.dataframe(latent[["name", "price", "gem_score",
+                             "total_reviews_calc", "release_year"]]
+                     .rename(columns={"gem_score": "모델 점수",
+                                      "total_reviews_calc": "리뷰수"}),
+                     use_container_width=True, hide_index=True)
+        
+    with tab3:
+        st.caption("Isolation Forest가 탐지한 통계적 이상 패턴 — "
+                   "리뷰 폭격, 조작 의심, 데이터 오류 후보 (확정이 아닌 검토 대상)")
+        sus = (catalog[catalog["is_suspicious"] == 1]
+               .sort_values("anomaly_score", ascending=False).head(20))
+        st.dataframe(sus[["name", "total_reviews_calc", "positive_ratio",
+                          "anomaly_score", "price"]]
+                     .rename(columns={"total_reviews_calc": "리뷰수",
+                                      "positive_ratio": "긍정률",
+                                      "anomaly_score": "이상점수"}),
+                     use_container_width=True, hide_index=True)
+        st.info("실제 탐지 사례: Call of Duty MW II/III (긍정률 22~32% — 리뷰 폭격), "
+                "동일 게임 중복 등재 (데이터 오류). 이상 플래그 게임은 "
+                "숨은 명작 라벨에서 자동 제외됩니다.")
+        
+# ═════════ 장르 선호도 분석 ═════════
+elif page == PAGES[5]:
+    st.title("📊 장르별 수요·공급 분석")
+
+    @st.cache_data
+    def genre_stats():
+        catalog = pd.read_parquet("data/processed/games_catalog.parquet")
+        import ast
+        rows = []
+        for _, r in catalog.iterrows():
+            try:
+                genres = ast.literal_eval(str(r["genres"]))
+            except (ValueError, SyntaxError):
+                continue
+            for g in genres:
+                rows.append({"genre": g, "owners": r["owners_lower"],
+                             "reviews": r["total_reviews_calc"]})
+        gdf = pd.DataFrame(rows)
+        agg = gdf.groupby("genre").agg(
+            게임수=("genre", "size"),
+            총보유자=("owners", "sum"),
+            총리뷰=("reviews", "sum")).reset_index()
+        agg["게임당_평균보유자"] = agg["총보유자"] / agg["게임수"]
+        return agg.nlargest(12, "게임수")
+
+    agg = genre_stats()
+
+    c1, c2 = st.columns(2)
+    with c1:
+        fig = px.bar(agg.sort_values("총보유자"),
+                     x="총보유자", y="genre", orientation="h",
+                     title="장르별 총 보유자 수 (유저 선호도 proxy)")
+        st.plotly_chart(fig, use_container_width=True)
+    with c2:
+        fig = px.bar(agg.sort_values("게임수"),
+                     x="게임수", y="genre", orientation="h",
+                     title="장르별 게임 수 (공급)")
+        st.plotly_chart(fig, use_container_width=True)
+
+    # 핵심 인사이트: 게임당 평균 보유자 = 경쟁 대비 수요
+    fig = px.scatter(agg, x="게임수", y="게임당_평균보유자",
+                     text="genre", size="총보유자", log_y=True,
+                     title="공급 vs 게임당 수요 — 우상단=블루오션, 우하단=레드오션")
+    fig.update_traces(textposition="top center")
+    st.plotly_chart(fig, use_container_width=True)
+    st.info("Indie는 게임 수가 압도적이지만 게임당 평균 보유자는 낮음 → "
+            "전형적 레드오션. 발표에서 '숨은 명작이 Indie에 몰리는 이유'와 연결 가능.")
 
 # ═════════ 5. 한계점 ═════════
 else:

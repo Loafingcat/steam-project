@@ -12,9 +12,14 @@ labels:
   hit:
     owners_lower_threshold: 100000   # owners 구간 하한 ≥ 10만 → 양성 15.6%
   hidden_gem:
-    positive_ratio_min: 0.85         # positive/(p+n) 직접 계산값
+    wilson_lb_min: 0.85          # raw 긍정률 → Wilson 하한 기준으로 교체
     owners_upper_threshold: 100000   # hit과 동일값 → 두 라벨 상호배타
-    min_total_reviews: 30
+    min_total_reviews: 30       # hit보다 엄격하게 (긍정률 신뢰도↑)
+
+anomaly:
+  enabled: true
+  contamination: 0.02            # 상위 2%를 이상으로 플래그
+  exclude_from_gem: true         # 플래그 게임은 숨은 명작 라벨에서 제외
 
 features:
   top_n_genres: 15

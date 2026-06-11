@@ -4,7 +4,7 @@ import yaml
 import kagglehub
 
 sys.path.insert(0, "src")
-from pipeline import load_raw, clean, make_labels, engineer, split_scale_save
+from pipeline import load_raw, clean, make_labels, engineer, split_scale_save, detect_anomalies
 
 def ensure_data(raw_path):
     """CSV가 없으면 kagglehub로 자동 다운로드"""
@@ -44,6 +44,7 @@ def main():
     ensure_data(cfg["data"]["raw_path"])
     df = load_raw(cfg)
     df = clean(df, cfg, meta)
+    df = detect_anomalies(df, cfg, meta)
     df = make_labels(df, cfg, meta)
     df = engineer(df, cfg, meta)
     split_scale_save(df, cfg, meta)

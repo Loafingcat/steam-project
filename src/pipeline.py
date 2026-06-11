@@ -14,6 +14,7 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.ensemble import IsolationForest
 
 log = logging.getLogger("pipeline")
 
@@ -90,6 +91,54 @@ def _owners_lower(s):
     except (ValueError, AttributeError):
         return np.nan
 
+def wilson_lower_bound(pos, n, z=1.96):
+    """긍정률의 Wilson score 95% 신뢰 하한.
+    소표본의 100%를 표본 크기만큼 할인 — 30/30→0.886, 950/1000(95%)→0.935"""
+    if n == 0:
+        return 0.0
+    p = pos / n
+    denom = 1 + z * z / n
+    center = p + z * z / (2 * n)
+    margin = z * np.sqrt(p * (1 - p) / n + z * z / (4 * n * n))
+    return (center - margin) / denom
+
+
+def detect_anomalies(df, cfg, meta):
+    """[3-사전] 리뷰 패턴 이상 탐지 (Isolation Forest, 비지도)
+    목적: 리뷰 폭격·조작 의심·데이터 오류 게임을 라벨링 전에 플래그.
+    주의: 출시 후 데이터를 쓰지만 이건 데이터 품질 스크리닝이지 예측 피처가 아님."""
+    ac = cfg.get("anomaly", {})
+    if not ac.get("enabled", False):
+        df["is_suspicious"] = 0
+        df["anomaly_score"] = 0.0
+        return df
+
+    log.info("[3-사전] 리뷰 패턴 이상 탐지")
+    owners_mid = df["estimated_owners"].apply(
+        lambda s: (lambda p: (float(p[0]) + float(p[1])) / 2 if len(p) == 2 else np.nan)(
+            str(s).replace(",", "").split("-"))
+    ).fillna(10000).clip(lower=10000)   # "0 - 20000" 구간 → 중앙값 10000
+
+    sig = pd.DataFrame({
+        "log_reviews": np.log1p(df["total_reviews_calc"]),
+        "rev_per_owner": (df["total_reviews_calc"] / owners_mid)
+                         .clip(upper=(df["total_reviews_calc"] / owners_mid).quantile(0.999)),
+        "positive_ratio": df["positive"] / df["total_reviews_calc"].replace(0, np.nan),
+        "rec_per_review": (df["recommendations"].fillna(0)
+                           / df["total_reviews_calc"]).clip(upper=10),
+        "log_price": np.log1p(df["price"]),
+    }).fillna(0)
+
+    iso = IsolationForest(contamination=ac["contamination"],
+                          n_estimators=200, random_state=42)
+    df["is_suspicious"] = (iso.fit_predict(sig) == -1).astype(int)
+    df["anomaly_score"] = -iso.score_samples(sig)
+
+    meta["anomaly"] = {"flagged": int(df["is_suspicious"].sum()),
+                       "contamination": ac["contamination"]}
+    log.info(f"  이상 플래그: {df['is_suspicious'].sum():,}건 "
+             f"({df['is_suspicious'].mean()*100:.1f}%)")
+    return df
 
 def make_labels(df, cfg, meta):
     log.info("[3/5] 타겟 라벨 (owners 구간 하한 기준)")
@@ -102,14 +151,22 @@ def make_labels(df, cfg, meta):
     df["positive_ratio"] = df["positive"] / df["total_reviews_calc"].replace(0, np.nan)
     df["positive_ratio"] = df["positive_ratio"].fillna(0)
 
+    df["wilson_lb"] = [wilson_lower_bound(p, n) for p, n
+                       in zip(df["positive"].fillna(0), df["total_reviews_calc"])]
+
     df["target_hit"] = (df["owners_lower"] >= lc["hit"]["owners_lower_threshold"]).astype(int)
 
     g = lc["hidden_gem"]
-    df["target_hidden_gem"] = (
-        (df["positive_ratio"] >= g["positive_ratio_min"])
+    gem = (
+        (df["wilson_lb"] >= g["wilson_lb_min"])              # ← raw ratio에서 교체
         & (df["owners_lower"] < g["owners_upper_threshold"])
         & (df["total_reviews_calc"] >= g["min_total_reviews"])
-    ).astype(int)
+    )
+    if cfg.get("anomaly", {}).get("exclude_from_gem", False):
+        n_excluded = int((gem & (df["is_suspicious"] == 1)).sum())
+        gem = gem & (df["is_suspicious"] == 0)
+        log.info(f"  이상 플래그로 gem 제외: {n_excluded}건")
+    df["target_hidden_gem"] = gem.astype(int)
 
     meta["label_stats"] = {
         "hit": {"positive_ratio": round(float(df["target_hit"].mean()), 4)},
@@ -175,6 +232,17 @@ def engineer(df, cfg, meta):
     dev1 = df["developers"].apply(lambda s: (_parse_list(s) or ["?"])[0])
     pub1 = df["publishers"].apply(lambda s: (_parse_list(s) or ["?"])[0])
     df["is_self_published"] = (dev1 == pub1).astype(int)
+    
+    catalog_cols = ["appid", "name", "price", "genres", "windows", "mac",
+                    "linux", "release_date", "positive_ratio", "wilson_lb",
+                    "owners_lower", "total_reviews_calc", "is_suspicious",
+                    "anomaly_score", "target_hidden_gem", "target_hit"]
+    catalog = df[[c for c in catalog_cols if c in df.columns]].copy()
+    catalog["release_year"] = catalog["release_date"].dt.year
+    catalog = catalog.drop(columns=["release_date"])
+    os.makedirs(cfg["data"]["processed_dir"], exist_ok=True)
+    catalog.to_parquet(f"{cfg['data']['processed_dir']}/games_catalog.parquet")
+    log.info(f"  카탈로그 저장: {len(catalog):,}건 (표시용)")
 
     # ═══ ⚠️ LEAKAGE 물리 차단 ═══
     leak = [c for c in fc["leakage_columns"] if c in df.columns]
@@ -182,7 +250,7 @@ def engineer(df, cfg, meta):
                             "categories", "genres", "tags",
                             "supported_languages", "release_date",
                             "owners_lower", "positive_ratio",
-                            "total_reviews_calc"] if c in df.columns]
+                            "total_reviews_calc, wilson_lb", "is_suspicious", "anomaly_score"] if c in df.columns]
     df = df.drop(columns=leak + drop_etc)
     meta["leakage_columns_dropped"] = leak
     log.warning(f"  ⚠️ LEAKAGE 차단 {len(leak)}개: {leak}")
@@ -200,6 +268,7 @@ def split_scale_save(df, cfg, meta):
     out = cfg["data"]["processed_dir"]
     os.makedirs(out, exist_ok=True)
     sc = cfg["split"]
+    
     text_col = df["short_description"] if "short_description" in df.columns else None
     feats = [c for c in df.columns
              if not c.startswith("target_") and c != "short_description"]
@@ -207,6 +276,9 @@ def split_scale_save(df, cfg, meta):
     meta["data_hash"] = hashlib.sha256(
         pd.util.hash_pandas_object(df[feats], index=False).values.tobytes()
     ).hexdigest()[:12]
+    # 전체 게임 스코어링용 (추천 탭에서 model.predict_proba에 사용)
+    # hidden_gem 스케일러 기준으로 변환해 저장
+    X_all = df[feats].astype(np.float32)
 
     for target in ["target_hit", "target_hidden_gem"]:
         tag = target.replace("target_", "")
@@ -226,6 +298,10 @@ def split_scale_save(df, cfg, meta):
         y_tr.to_frame().to_parquet(f"{out}/y_train_{tag}.parquet")
         y_te.to_frame().to_parquet(f"{out}/y_test_{tag}.parquet")
         joblib.dump(scaler, f"{out}/scaler_{tag}.joblib")
+        if tag == "hidden_gem":
+            X_all_s = pd.DataFrame(scaler.transform(X_all),
+                                   columns=feats, index=X_all.index)
+            X_all_s.to_parquet(f"{out}/X_all_hidden_gem.parquet")
 
         # DL 텍스트 실험용 TF-IDF (train에만 fit)
         if text_col is not None and cfg["data"].get("keep_text"):
