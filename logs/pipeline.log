@@ -20,3 +20,69 @@
 09:29:32 | INFO |   [hidden_gem] train 37,257 / test 9,315 (양성 19.7%)
 09:29:32 | INFO |   meta 저장 | data_hash=77ce8466827e
 09:29:32 | INFO | ✅ 완료 (15.7초)
+10:17:57 | INFO | [1/5] 로딩: data/raw/games_march2025_cleaned.csv
+10:18:00 | INFO |   89,618행 × 34열 (제외 13열)
+10:18:00 | INFO | [2/5] 클리닝
+10:18:00 | INFO |   - 중복 제거: 0건
+10:18:00 | INFO |   - 출시일 파싱 실패 제거: 0건
+10:18:00 | INFO |   - 출시 180일 미만 제거: 9,943건
+10:18:00 | INFO |   - 리뷰 10개 미만 제거: 33,103건
+10:18:00 | INFO |   - 가격 클리핑: 57건
+10:18:00 | INFO |   클리닝 후: 46,572행 (52.0%)
+10:18:00 | INFO | [3/5] 타겟 라벨 (owners 구간 하한 기준)
+10:18:00 | INFO |   흥행: 15.6% | 숨은명작: 19.7%
+10:18:00 | INFO | [4/5] 피처 엔지니어링
+10:18:01 | INFO |   - genres: 상위 15개 멀티핫 + n_genre
+10:18:04 | INFO |   - tags: 상위 30개 멀티핫 + n_tag
+10:18:05 | INFO |   - categories: 상위 15개 멀티핫 + n_cat
+10:18:07 | WARNING |   ⚠️ LEAKAGE 차단 17개: ['positive', 'negative', 'pct_pos_total', 'num_reviews_total', 'pct_pos_recent', 'num_reviews_recent', 'recommendations', 'peak_ccu', 'estimated_owners', 'average_playtime_forever', 'average_playtime_2weeks', 'median_playtime_forever', 'median_playtime_2weeks', 'user_score', 'score_rank', 'metacritic_score', 'discount']
+10:18:07 | INFO |   최종 피처 수: 83
+10:18:07 | INFO | [5/5] 분할 / 스케일링 / 저장
+10:18:09 | INFO |   [hit] train 37,257 / test 9,315 (양성 15.6%)
+10:18:12 | INFO |   [hidden_gem] train 37,257 / test 9,315 (양성 19.7%)
+10:18:12 | INFO |   meta 저장 | data_hash=77ce8466827e
+10:18:12 | INFO | ✅ 완료 (14.8초)
+11:54:35 | INFO | [1/5] 로딩: data/raw/games_march2025_cleaned.csv
+11:54:38 | INFO |   89,618행 × 34열 (제외 13열)
+11:54:38 | INFO | [2/5] 클리닝
+11:54:38 | INFO |   - 중복 제거: 0건
+11:54:38 | INFO |   - 출시일 파싱 실패 제거: 0건
+11:54:38 | INFO |   - 출시 180일 미만 제거: 9,943건
+11:54:38 | INFO |   - 리뷰 10개 미만 제거: 33,103건
+11:54:38 | INFO |   - 가격 클리핑: 57건
+11:54:38 | INFO |   클리닝 후: 46,572행 (52.0%)
+11:54:38 | INFO | [3/5] 타겟 라벨 (owners 구간 하한 기준)
+11:54:38 | INFO |   흥행: 15.6% | 숨은명작: 19.7%
+11:54:38 | INFO | [4/5] 피처 엔지니어링
+11:54:39 | INFO |   - genres: 상위 15개 멀티핫 + n_genre
+11:54:42 | INFO |   - tags: 상위 30개 멀티핫 + n_tag
+11:54:43 | INFO |   - categories: 상위 15개 멀티핫 + n_cat
+11:54:45 | WARNING |   ⚠️ LEAKAGE 차단 17개: ['positive', 'negative', 'pct_pos_total', 'num_reviews_total', 'pct_pos_recent', 'num_reviews_recent', 'recommendations', 'peak_ccu', 'estimated_owners', 'average_playtime_forever', 'average_playtime_2weeks', 'median_playtime_forever', 'median_playtime_2weeks', 'user_score', 'score_rank', 'metacritic_score', 'discount']
+11:54:45 | INFO |   최종 피처 수: 83
+11:54:45 | INFO | [5/5] 분할 / 스케일링 / 저장
+11:54:47 | INFO |   [hit] train 37,257 / test 9,315 (양성 15.6%)
+11:54:50 | INFO |   [hidden_gem] train 37,257 / test 9,315 (양성 19.7%)
+11:54:50 | INFO |   meta 저장 | data_hash=77ce8466827e
+11:54:50 | INFO | ✅ 완료 (14.8초)
+11:55:40 | INFO | [1/5] 로딩: data/raw/games_march2025_cleaned.csv
+11:55:43 | INFO |   89,618행 × 34열 (제외 13열)
+11:55:43 | INFO | [2/5] 클리닝
+11:55:43 | INFO |   - 중복 제거: 0건
+11:55:43 | INFO |   - 출시일 파싱 실패 제거: 0건
+11:55:43 | INFO |   - 출시 180일 미만 제거: 9,943건
+11:55:43 | INFO |   - 리뷰 10개 미만 제거: 33,103건
+11:55:43 | INFO |   - 가격 클리핑: 57건
+11:55:43 | INFO |   클리닝 후: 46,572행 (52.0%)
+11:55:43 | INFO | [3/5] 타겟 라벨 (owners 구간 하한 기준)
+11:55:43 | INFO |   흥행: 15.6% | 숨은명작: 19.7%
+11:55:43 | INFO | [4/5] 피처 엔지니어링
+11:55:44 | INFO |   - genres: 상위 15개 멀티핫 + n_genre
+11:55:47 | INFO |   - tags: 상위 30개 멀티핫 + n_tag
+11:55:48 | INFO |   - categories: 상위 15개 멀티핫 + n_cat
+11:55:50 | WARNING |   ⚠️ LEAKAGE 차단 17개: ['positive', 'negative', 'pct_pos_total', 'num_reviews_total', 'pct_pos_recent', 'num_reviews_recent', 'recommendations', 'peak_ccu', 'estimated_owners', 'average_playtime_forever', 'average_playtime_2weeks', 'median_playtime_forever', 'median_playtime_2weeks', 'user_score', 'score_rank', 'metacritic_score', 'discount']
+11:55:50 | INFO |   최종 피처 수: 83
+11:55:50 | INFO | [5/5] 분할 / 스케일링 / 저장
+11:55:53 | INFO |   [hit] train 37,257 / test 9,315 (양성 15.6%)
+11:55:55 | INFO |   [hidden_gem] train 37,257 / test 9,315 (양성 19.7%)
+11:55:55 | INFO |   meta 저장 | data_hash=77ce8466827e
+11:55:55 | INFO | ✅ 완료 (15.0초)
