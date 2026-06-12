@@ -180,3 +180,81 @@
 16:17:40 | INFO |   [hidden_gem] train 37,257 / test 9,315 (양성 9.8%)
 16:17:40 | INFO |   meta 저장 | data_hash=8030acae14bf
 16:17:40 | INFO | ✅ 완료 (17.0초)
+14:03:27 | INFO | [1/5] 로딩: data/raw/games_march2025_cleaned.csv
+14:03:30 | INFO |   89,618행 × 34열 (제외 13열)
+14:03:30 | INFO | [2/5] 클리닝
+14:03:30 | INFO |   - 중복 제거: 0건
+14:03:30 | INFO |   - 출시일 파싱 실패 제거: 0건
+14:03:30 | INFO |   - 출시 180일 미만 제거: 9,943건
+14:03:30 | INFO |   - 리뷰 10개 미만 제거: 33,103건
+14:03:30 | INFO |   - 가격 클리핑: 57건
+14:03:30 | INFO |   클리닝 후: 46,572행 (52.0%)
+14:03:30 | INFO | [3-사전] 리뷰 패턴 이상 탐지
+14:03:31 | INFO |   이상 플래그: 932건 (2.0%)
+14:03:31 | INFO | [3/5] 타겟 라벨 (owners 구간 하한 기준)
+14:03:31 | INFO |   이상 플래그로 gem 제외: 154건
+14:03:31 | INFO |   흥행: 15.6% | 숨은명작: 9.8%
+14:03:31 | INFO | [4/5] 피처 엔지니어링
+14:03:32 | INFO |   - genres: 상위 15개 멀티핫 + n_genre
+14:03:35 | INFO |   - tags: 상위 30개 멀티핫 + n_tag
+14:03:36 | INFO |   - categories: 상위 15개 멀티핫 + n_cat
+14:03:38 | INFO |   카탈로그 저장: 46,572건 (표시용)
+14:03:38 | WARNING |   ⚠️ LEAKAGE 차단 17개: ['positive', 'negative', 'pct_pos_total', 'num_reviews_total', 'pct_pos_recent', 'num_reviews_recent', 'recommendations', 'peak_ccu', 'estimated_owners', 'average_playtime_forever', 'average_playtime_2weeks', 'median_playtime_forever', 'median_playtime_2weeks', 'user_score', 'score_rank', 'metacritic_score', 'discount']
+14:03:38 | INFO |   최종 피처 수: 85
+14:03:38 | INFO | [5/5] 분할 / 스케일링 / 저장
+14:03:41 | INFO |   [hit] train 37,257 / test 9,315 (양성 15.6%)
+14:03:44 | INFO |   [hidden_gem] train 37,257 / test 9,315 (양성 9.8%)
+14:03:44 | INFO |   meta 저장 | data_hash=8030acae14bf
+14:03:44 | INFO | ✅ 완료 (16.6초)
+14:24:16 | INFO | [1/5] 로딩: data/raw/games_march2025_cleaned.csv
+14:24:19 | INFO |   89,618행 × 34열 (제외 13열)
+14:24:19 | INFO | [2/5] 클리닝
+14:24:19 | INFO |   - 중복 제거: 0건
+14:24:19 | INFO |   - 출시일 파싱 실패 제거: 0건
+14:24:19 | INFO |   - 출시 180일 미만 제거: 9,943건
+14:24:19 | INFO |   - 리뷰 10개 미만 제거: 33,103건
+14:24:19 | INFO |   - 가격 클리핑: 57건
+14:24:19 | INFO |   클리닝 후: 46,572행 (52.0%)
+14:24:19 | INFO | [3-사전] 리뷰 패턴 이상 탐지
+14:24:20 | INFO |   이상 플래그: 932건 (2.0%)
+14:24:20 | INFO | [3/5] 타겟 라벨 (owners 구간 하한 기준)
+14:24:20 | INFO |   이상 플래그로 gem 제외: 154건
+14:24:20 | INFO |   흥행: 15.6% | 숨은명작: 9.8%
+14:24:20 | INFO | [4/5] 피처 엔지니어링
+14:24:21 | INFO |   - genres: 상위 15개 멀티핫 + n_genre
+14:24:24 | INFO |   - tags: 상위 30개 멀티핫 + n_tag
+14:24:24 | INFO |   - categories: 상위 15개 멀티핫 + n_cat
+14:24:26 | INFO |   카탈로그 저장: 46,572건 (표시용)
+14:24:26 | WARNING |   ⚠️ LEAKAGE 차단 17개: ['positive', 'negative', 'pct_pos_total', 'num_reviews_total', 'pct_pos_recent', 'num_reviews_recent', 'recommendations', 'peak_ccu', 'estimated_owners', 'average_playtime_forever', 'average_playtime_2weeks', 'median_playtime_forever', 'median_playtime_2weeks', 'user_score', 'score_rank', 'metacritic_score', 'discount']
+14:24:26 | INFO |   최종 피처 수: 85
+14:24:26 | INFO | [5/5] 분할 / 스케일링 / 저장
+14:24:29 | INFO |   [hit] train 37,257 / test 9,315 (양성 15.6%)
+14:24:32 | INFO |   [hidden_gem] train 37,257 / test 9,315 (양성 9.8%)
+14:24:32 | INFO |   meta 저장 | data_hash=8030acae14bf
+14:24:32 | INFO | ✅ 완료 (16.5초)
+14:29:35 | INFO | [1/5] 로딩: data/raw/games_march2025_cleaned.csv
+14:29:38 | INFO |   89,618행 × 34열 (제외 13열)
+14:29:38 | INFO | [2/5] 클리닝
+14:29:38 | INFO |   - 중복 제거: 0건
+14:29:38 | INFO |   - 출시일 파싱 실패 제거: 0건
+14:29:38 | INFO |   - 출시 180일 미만 제거: 9,943건
+14:29:38 | INFO |   - 리뷰 10개 미만 제거: 33,103건
+14:29:38 | INFO |   - 가격 클리핑: 57건
+14:29:38 | INFO |   클리닝 후: 46,572행 (52.0%)
+14:29:38 | INFO | [3-사전] 리뷰 패턴 이상 탐지
+14:29:40 | INFO |   이상 플래그: 932건 (2.0%)
+14:29:40 | INFO | [3/5] 타겟 라벨 (owners 구간 하한 기준)
+14:29:40 | INFO |   이상 플래그로 gem 제외: 154건
+14:29:40 | INFO |   흥행: 15.6% | 숨은명작: 9.8%
+14:29:40 | INFO | [4/5] 피처 엔지니어링
+14:29:40 | INFO |   - genres: 상위 15개 멀티핫 + n_genre
+14:29:43 | INFO |   - tags: 상위 30개 멀티핫 + n_tag
+14:29:44 | INFO |   - categories: 상위 15개 멀티핫 + n_cat
+14:29:46 | INFO |   카탈로그 저장: 46,572건 (표시용)
+14:29:46 | WARNING |   ⚠️ LEAKAGE 차단 17개: ['positive', 'negative', 'pct_pos_total', 'num_reviews_total', 'pct_pos_recent', 'num_reviews_recent', 'recommendations', 'peak_ccu', 'estimated_owners', 'average_playtime_forever', 'average_playtime_2weeks', 'median_playtime_forever', 'median_playtime_2weeks', 'user_score', 'score_rank', 'metacritic_score', 'discount']
+14:29:46 | INFO |   최종 피처 수: 83
+14:29:46 | INFO | [5/5] 분할 / 스케일링 / 저장
+14:29:49 | INFO |   [hit] train 37,257 / test 9,315 (양성 15.6%)
+14:29:52 | INFO |   [hidden_gem] train 37,257 / test 9,315 (양성 9.8%)
+14:29:52 | INFO |   meta 저장 | data_hash=77ce8466827e
+14:29:52 | INFO | ✅ 완료 (16.4초)

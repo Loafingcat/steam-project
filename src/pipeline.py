@@ -250,7 +250,7 @@ def engineer(df, cfg, meta):
                             "categories", "genres", "tags",
                             "supported_languages", "release_date",
                             "owners_lower", "positive_ratio",
-                            "total_reviews_calc, wilson_lb", "is_suspicious", "anomaly_score"] if c in df.columns]
+                            "total_reviews_calc", "wilson_lb", "is_suspicious", "anomaly_score"] if c in df.columns]
     df = df.drop(columns=leak + drop_etc)
     meta["leakage_columns_dropped"] = leak
     log.warning(f"  ⚠️ LEAKAGE 차단 {len(leak)}개: {leak}")
