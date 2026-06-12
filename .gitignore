@@ -7,6 +7,35 @@ wheels/
 *.egg-info
 
 # Virtual environments
-.venv
+.venv/
 
+# Data
 data/raw/
+data/processed/
+
+# MLflow
+mlruns/
+mlartifacts/
+mlflow.db
+
+# Model files
+*.pkl
+*.joblib
+*.onnx
+*.h5
+*.pt
+*.pth
+
+# Jupyter
+.ipynb_checkpoints/
+
+# VSCode
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log

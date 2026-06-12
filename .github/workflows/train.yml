@@ -1,0 +1,53 @@
+# 학습코드 수정 시 자동 학습
+name: Auto Train on Code Change 
+
+on:
+  push:
+    paths:
+      # 이 파일들이 바뀌면 트리거
+      - "train_hidden_gem.py"
+      - "train_hit_reference.py"
+      - "src/pipeline.py"
+      - "configs/config.yaml"
+    branches: [main]
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: 패키지 설치
+        run: |
+          pip install pandas numpy scikit-learn xgboost lightgbm \
+                      imbalanced-learn pyyaml pyarrow joblib mlflow optuna
+
+      - name: 데이터 다운로드
+        run: |
+          # 실제로는 DVC pull이나 S3에서 받는 게 정석
+          # 여기선 Git LFS나 팀 공유 스토리지 가정
+          mkdir -p data/raw data/processed logs
+          # cp 또는 wget으로 CSV 배치
+
+      - name: 전처리 + 학습
+        env:
+          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+          KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+
+        run: |
+          python run_pipeline.py
+          python train_hidden_gem.py --quick
+          python train_hit_reference.py --trials 5
+
+      - name: 결과 업로드
+        uses: actions/upload-artifact@v4
+        with:
+          name: mlflow-results
+          path: |
+            data/processed/comparison_*.json
+            data/processed/pipeline_meta.json
+            mlflow.db
