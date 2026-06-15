@@ -1,4 +1,4 @@
-# 🎮 Steam Games Analytics — ML vs DL 비교 프로젝트
+# 🎮 Steam Games Analytics — ML vs DL 비교 프로젝트 / 접근성 높이기, 더 쉽게 설명
 
 > Steam 게임 데이터(89,618건)를 활용해 세 가지 문제를 ML과 DL로 풀고 비교한다.
 > **숨은 명작 탐지**(정형), **흥행 예측**(정형), **자연어 검색**(텍스트).
