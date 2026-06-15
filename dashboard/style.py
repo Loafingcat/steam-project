@@ -21,9 +21,7 @@ footer { visibility: hidden; }
     border-bottom: 2px solid #000e1a;
     display: flex;
     align-items: center;
-    position: sticky;
-    top: 0;
-    z-index: 999;
+    height: 64px;
     box-shadow: 0 2px 8px rgba(0,0,0,0.5);
 }
 
@@ -31,42 +29,10 @@ footer { visibility: hidden; }
     font-size: 24px;
     font-weight: 900;
     color: #66c0f4 !important;
-    padding: 14px 24px 14px 0;
-    border-right: 1px solid #2a3f5a;
-    margin-right: 12px;
     letter-spacing: 3px;
     font-style: italic;
     text-decoration: none !important;
     display: inline-block;
-}
-
-.steam-nav-logo:hover {
-    color: white !important;
-}
-
-.steam-nav-link {
-    font-size: 13px;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    padding: 19px 16px 17px 16px;
-    display: inline-block;
-    text-decoration: none !important;
-    border-bottom: 2px solid transparent;
-    transition: color 0.15s, border-color 0.15s;
-    margin-bottom: -2px;
-}
-
-.steam-nav-link:hover {
-    color: #ffffff !important;
-}
-
-.nav-active {
-    color: #ffffff !important;
-    border-bottom: 2px solid #66c0f4 !important;
-}
-
-.nav-inactive {
-    color: #8f98a0 !important;
 }
 
 .steam-hero {
@@ -161,6 +127,23 @@ footer { visibility: hidden; }
     color: #c6d4df !important;
 }
 
+[data-baseweb="select"] span {
+    color: #c6d4df !important;
+}
+
+[data-baseweb="popover"] ul {
+    background: #16202d !important;
+    border: 1px solid #2a3f5a !important;
+}
+
+[data-baseweb="popover"] li {
+    color: #c6d4df !important;
+}
+
+[data-baseweb="popover"] li:hover {
+    background: #2a475e !important;
+}
+
 [data-testid="stTabs"] button {
     color: #8cbdd8 !important;
     font-size: 13px;
@@ -192,25 +175,12 @@ def steam_theme():
 
 
 def steam_nav(active="홈"):
-    pages = [
-        ("홈", "./"),
-        ("장르 분석", "./1_장르분석"),
-        ("가격 분석", "./2_가격분석"),
-        ("흥행 예측", "./3_예측모델"),
-    ]
-
-    links = '<a href="./" target="_self" class="steam-nav-logo">STEAM</a>'
-
-    for label, href in pages:
-        is_active = active in label or label in active
-        css = "nav-active" if is_active else "nav-inactive"
-        links += (
-            f'<a href="{href}" target="_self" '
-            f'class="steam-nav-link {css}">{label}</a>'
-        )
-
     st.markdown(
-        f'<div class="steam-nav-bar">{links}</div>',
+        """
+        <div class="steam-nav-bar">
+            <span class="steam-nav-logo">STEAM</span>
+        </div>
+        """,
         unsafe_allow_html=True
     )
 
