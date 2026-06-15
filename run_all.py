@@ -1,14 +1,14 @@
 """
 MLOps 파이프라인 전체 실행 (DAG)
 
-    python run_all.py                  # 전처리 → 숨은명작 학습 → 흥행 학습
-    python run_all.py --skip-hit       # 흥행(팀원 B 파트) 제외
-    python run_all.py --quick          # 빠른 검증 모드
-    python run_all.py --trials 20      # 흥행 Optuna trial 수
+    uv run run_all.py                  # 전처리 → 숨은명작 → 검색인덱스 → 검색평가
+    uv run run_all.py --quick          # 빠른 검증
+    uv run run_all.py --ml-only        # ML만 (DL 제외, CI/CD용)
+    uv run run_all.py --no-dl          # 검색 임베딩 생략
 
 실행 후:
-    mlflow ui --backend-store-uri sqlite:///mlflow.db   # localhost:5000
-    streamlit run app.py                                # localhost:8501
+    uv run mlflow ui --backend-store-uri sqlite:///mlflow.db
+    uv run streamlit run app.py
 """
 import argparse
 import subprocess
@@ -16,7 +16,7 @@ import sys
 import time
 
 
-def run(cmd: list, name: str):
+def run(cmd, name):
     print(f"\n{'━'*55}\n━━━ {name}\n{'━'*55}")
     if subprocess.run(cmd).returncode != 0:
         print(f"❌ {name} 실패 — 중단"); sys.exit(1)
@@ -24,29 +24,39 @@ def run(cmd: list, name: str):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--skip-hit", action="store_true",
-                    help="흥행 예측(팀원 B 파트) 생략")
     ap.add_argument("--quick", action="store_true")
-    ap.add_argument("--trials", type=int, default=20)
+    ap.add_argument("--ml-only", action="store_true")
+    ap.add_argument("--no-dl", action="store_true", help="검색 임베딩 생략")
     args = ap.parse_args()
 
     t0 = time.time()
     py = sys.executable
 
+    # Stage 1: 전처리
     run([py, "run_pipeline.py"], "Stage 1: 전처리 파이프라인")
 
-    gem_cmd = [py, "train_hidden_gem.py"] + (["--quick"] if args.quick else [])
-    run(gem_cmd, "Stage 2a: 숨은 명작 탐지 (내 모델)")
+    # Stage 2: 숨은 명작 (정형 ML vs DL)
+    gem = [py, "train_hidden_gem.py"]
+    if args.quick:
+        gem.append("--quick")
+    if args.ml_only:
+        gem.append("--ml-only")
+    run(gem, "Stage 2: 숨은 명작 탐지 (정형 데이터)")
 
-    if not args.skip_hit:
-        trials = 5 if args.quick else args.trials
-        run([py, "train_hit_reference.py", "--trials", str(trials)],
-            "Stage 2b: 흥행 예측 (팀원 B 참고 템플릿)")
+    # Stage 3: 검색 인덱스 (텍스트 ML vs DL)
+    idx = [py, "build_search_index.py"]
+    if args.no_dl:
+        idx.append("--no-dl")
+    run(idx, "Stage 3: 의미 검색 인덱스 구축 (텍스트 데이터)")
+
+    # Stage 4: 검색 평가
+    if not args.no_dl:
+        run([py, "eval_search.py"], "Stage 4: 검색 ML vs DL 평가")
 
     print(f"\n{'═'*55}")
     print(f"✅ 전체 완료 ({(time.time()-t0)/60:.1f}분)")
-    print("  mlflow ui --backend-store-uri sqlite:///mlflow.db")
-    print("  streamlit run app.py")
+    print("  uv run mlflow ui --backend-store-uri sqlite:///mlflow.db")
+    print("  uv run streamlit run app.py")
     print("═" * 55)
 
 

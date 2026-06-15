@@ -37,11 +37,10 @@ jobs:
         env:
           KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
           KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
-
         run: |
-          python run_pipeline.py
-          python train_hidden_gem.py --quick
-          python train_hit_reference.py --trials 5
+          uv run run_pipeline.py
+          uv run train_hidden_gem.py --ml-only
+          uv run train_hit_reference.py --ml-only --trials 10
 
       - name: 결과 업로드
         uses: actions/upload-artifact@v4

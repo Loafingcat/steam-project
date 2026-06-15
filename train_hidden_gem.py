@@ -88,6 +88,8 @@ def tune_threshold(y_true, y_prob):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--quick", action="store_true")
+    ap.add_argument("--ml-only", action="store_true",           # ← 이 줄 추가
+                    help="ML 모델만 실행 (DL 제외 — CI/CD용)")  # ← 이 줄 추가
     args = ap.parse_args()
 
     mlflow.set_tracking_uri(TRACKING_URI)
@@ -99,7 +101,12 @@ def main():
              f"양성 {y_tr.mean()*100:.1f}% (불균형 1:{spw:.1f})")
 
     results = []
-    for name, model, use_smote, family in build_experiments(spw, args.quick):
+    experiments = build_experiments(spw, args.quick)
+    if args.ml_only:                                                          # ← 추가
+        experiments = [(n,m,s,f) for n,m,s,f in experiments if f == "ML"]     # ← 추가
+        log.info("  --ml-only: DL 모델 제외")                                 # ← 추가
+    for name, model, use_smote, family in experiments:
+        
         Xf, yf = (SMOTE(random_state=42).fit_resample(X_tr, y_tr)
                   if use_smote else (X_tr, y_tr))
         t0 = time.time()
