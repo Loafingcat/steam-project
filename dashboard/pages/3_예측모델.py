@@ -1,155 +1,102 @@
+import os
+import sys
+import joblib
+import numpy as np
+import pandas as pd
+import torch
+import torch.nn as nn
 import streamlit as st
-from style import steam_theme, steam_nav, steam_hero, section_header
 
-st.set_page_config(page_title="흥행 예측 | Steam Analytics", page_icon="🤖", layout="wide")
-steam_theme()
-steam_nav(active="예측")
-steam_hero(
-    title="Success Prediction",
-    subtitle="ML · DL 모델 기반 게임 흥행 가능성 예측",
-    badge="COMING SOON"
-)
+# ── [1. 페이지 기본 설정 및 디자인] ──
+st.set_page_config(page_title="Steam Success Predictor", page_icon="🎮", layout="wide")
 
-st.write("")
-
-# ── 준비 상태 배너 ──
 st.markdown("""
-<div style="
-    background: linear-gradient(135deg, #16202d, #1a3a5c);
-    border: 1px solid #2a3f5a;
-    border-left: 4px solid #66c0f4;
-    border-radius: 4px;
-    padding: 24px 28px;
-    margin-bottom: 24px;
-">
-    <p style="color:#66c0f4;font-size:12px;text-transform:uppercase;letter-spacing:2px;margin:0 0 6px 0;">
-        STATUS
-    </p>
-    <p style="color:#c6d4df;font-size:16px;margin:0;">
-        모델 학습 완료 후 이 페이지에 예측 결과가 자동으로 연동됩니다.
-        아래 시뮬레이터는 데모용입니다.
-    </p>
-</div>
+<style>
+.stApp { background: linear-gradient(180deg, #0e141b 0%, #1b2838 42%, #0b1220 100%) !important; color: #c7d5e0; }
+.sub-title { color: #66c0f4; font-size: 14px; font-weight: 700; margin-bottom: 20px; text-transform: uppercase; }
+.report-card { background: #16202d; border: 1px solid #2a3f5a; padding: 20px; margin-bottom: 15px; }
+.score-val { color: white; font-size: 42px; font-weight: 900; font-family: sans-serif; }
+</style>
 """, unsafe_allow_html=True)
 
-# ── 예정 기능 카드 ──
-section_header("📋 예정 기능")
+st.title("🎮 게임 스펙 실시간 추론 시뮬레이터")
+st.markdown("---")
 
-c1, c2, c3 = st.columns(3)
-cards = [
-    ("🌲", "Random Forest", "전통 ML 앙상블 모델.\n흥행 / 비흥행 분류"),
-    ("⚡", "XGBoost",        "Gradient Boosting 기반.\nFeature Importance 분석"),
-    ("🧠", "Deep Learning",  "PyTorch MLP 모델.\nML vs DL 성능 비교"),
-]
-for col, (icon, title, desc) in zip([c1, c2, c3], cards):
-    with col:
-        st.markdown(f"""
-        <div style="
-            background:#16202d;
-            border:1px solid #2a3f5a;
-            border-radius:4px;
-            padding:20px;
-            text-align:center;
-            height:140px;
-        ">
-            <div style="font-size:32px;">{icon}</div>
-            <p style="color:#66c0f4;font-weight:700;font-size:14px;margin:8px 0 4px 0;">{title}</p>
-            <p style="color:#8cbdd8;font-size:12px;margin:0;white-space:pre-line;">{desc}</p>
-        </div>
-        """, unsafe_allow_html=True)
+# ── [2. 모델 정의 및 리소스 로드] ──
+MODEL_DIR = os.path.abspath("model")
 
-st.write("")
-c4, c5 = st.columns(2)
-cards2 = [
-    ("🔍", "Hidden Gem Detection", "숨은 명작 탐지.\n긍정률 ≥ 85% & Owners < 10만"),
-    ("📊", "SHAP Explainability",  "어떤 피처가 흥행에 영향?\nSHAP 분석으로 근거 제시"),
-]
-for col, (icon, title, desc) in zip([c4, c5], cards2):
-    with col:
-        st.markdown(f"""
-        <div style="
-            background:#16202d;
-            border:1px solid #2a3f5a;
-            border-radius:4px;
-            padding:20px;
-            text-align:center;
-            height:130px;
-        ">
-            <div style="font-size:28px;">{icon}</div>
-            <p style="color:#66c0f4;font-weight:700;font-size:14px;margin:8px 0 4px 0;">{title}</p>
-            <p style="color:#8cbdd8;font-size:12px;margin:0;white-space:pre-line;">{desc}</p>
-        </div>
-        """, unsafe_allow_html=True)
+class SteamSuccessMLP(nn.Module):
+    def __init__(self, input_dim):
+        super().__init__()
+        self.network = nn.Sequential(
+            nn.Linear(input_dim, 256), nn.BatchNorm1d(256), nn.ReLU(), nn.Dropout(0.4),
+            nn.Linear(256, 64), nn.BatchNorm1d(64), nn.ReLU(), nn.Dropout(0.3),
+            nn.Linear(64, 1), nn.Sigmoid()
+        )
+    def forward(self, x): return self.network(x)
 
-st.divider()
+@st.cache_resource
+def load_prediction_resources():
+    lgbm = joblib.load(os.path.join(MODEL_DIR, "model_lgbm.pkl"))
+    features = joblib.load(os.path.join(MODEL_DIR, "feature_names.pkl"))
+    scaler = joblib.load(os.path.join(MODEL_DIR, "scaler.pkl"))
+    dl_model = SteamSuccessMLP(len(features))
+    dl_model.load_state_dict(torch.load(os.path.join(MODEL_DIR, "model_dl_weights.pth"), map_location="cpu"))
+    dl_model.eval()
+    return lgbm, dl_model, features, scaler
 
-# ── 데모 시뮬레이터 ──
-section_header("🎮 Demo Simulator  —  간단 흥행 예측 체험")
+lgbm_model, dl_model, feature_names, scaler = load_prediction_resources()
 
-col_input, col_result = st.columns([1, 1])
+# ── [3. 입력 UI] ──
+col_input, col_report = st.columns([1, 1], gap="large")
 
 with col_input:
-    price = st.slider("게임 가격 ($)", 0, 60, 19)
-    genre = st.selectbox("장르", [
-        "Action", "RPG", "Adventure", "Strategy",
-        "Simulation", "Indie", "Sports", "Racing"
-    ])
-    platform_cnt = st.selectbox("지원 플랫폼 수", [1, 2, 3])
-    is_free = st.checkbox("무료 게임")
+    st.markdown('<div class="sub-title">📝 게임 스펙 설정</div>', unsafe_allow_html=True)
+    is_free = st.checkbox("🆓 무료 게임")
+    price = st.slider("💰 가격 ($)", 0.0, 100.0, 14.99, disabled=is_free)
+    achievements = st.slider("🏆 도전과제 개수", 0, 500, 0)
+    dlc_count = st.number_input("📦 DLC 개수", 0, 100, 0)
+    n_languages = st.slider("🌐 지원 언어 수", 1, 30, 1)
+    p_win = st.checkbox("Windows", True)
+    p_mac = st.checkbox("macOS", False)
+    p_lin = st.checkbox("Linux", False)
+    selected_genre = st.selectbox("대표 장르", ["Action", "RPG", "Adventure", "Casual", "Strategy", "Simulation", "Indie"])
+    selected_tags = st.multiselect("대표 태그", ["Action", "RPG", "Adventure", "Casual", "Strategy", "Simulation", "Indie"])
 
-    predict_btn = st.button("▶  예측하기", use_container_width=True)
+    # ── [4. 버튼 기반 추론 파이프라인] ──
+    if st.button("🚀 예측 결과 생성하기"):
+        input_dict = {feat: 0.0 for feat in feature_names}
+        input_dict.update({'price': float(price), 'is_free': 1.0 if is_free else 0.0, 
+                           'achievements': float(achievements), 'dlc_count': float(dlc_count),
+                           'n_languages': float(n_languages), 'windows': 1.0 if p_win else 0.0,
+                           'mac': 1.0 if p_mac else 0.0, 'linux': 1.0 if p_lin else 0.0,
+                           'n_platforms': float(sum([p_win, p_mac, p_lin])), 'log_price': np.log1p(price),
+                           'release_year': 2024.0})
+        
+        # 장르/태그 매핑
+        g_key = f"genre_{selected_genre.lower()}"
+        if g_key in input_dict: input_dict[g_key] = 1.0
+        for tag in selected_tags:
+            tk = f"tag_{tag.lower()}"
+            if tk in input_dict: input_dict[tk] = 1.0
 
-with col_result:
-    if predict_btn:
-        # 단순 데모 점수
-        score = 50
-        if is_free:           score += 15
-        if price <= 10:        score += 10
-        elif price <= 20:      score += 5
-        elif price >= 40:      score -= 10
-        if genre in ["Action", "RPG", "Indie"]: score += 10
-        score += platform_cnt * 3
-        score = max(5, min(95, score))
+        input_df = pd.DataFrame([input_dict])[feature_names]
+        input_df_scaled = pd.DataFrame(scaler.transform(input_df), columns=feature_names)
 
-        level = (
-            ("🔥 대흥행 예상",    "#66c0f4") if score >= 75 else
-            ("✅ 흥행 가능",      "#4caf50") if score >= 55 else
-            ("⚠️ 보통",          "#ffc107") if score >= 40 else
-            ("❌ 흥행 어려움",   "#ef5350")
-        )
+        # 모델 추론
+        ml_prob = lgbm_model.predict_proba(input_df_scaled)[0][1] * 100
+        with torch.no_grad():
+            dl_prob = dl_model(torch.tensor(input_df_scaled.values, dtype=torch.float32)).item() * 100
 
-        st.markdown(f"""
-        <div style="
-            background:#16202d;
-            border:1px solid #2a3f5a;
-            border-radius:4px;
-            padding:28px;
-            text-align:center;
-            margin-top:10px;
-        ">
-            <p style="color:#8cbdd8;font-size:12px;letter-spacing:2px;margin:0 0 8px 0;">
-                예상 흥행 점수
-            </p>
-            <div style="font-size:56px;font-weight:900;color:{level[1]};line-height:1;">
-                {score}%
-            </div>
-            <div style="font-size:18px;color:{level[1]};margin-top:8px;font-weight:700;">
-                {level[0]}
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-        st.progress(score / 100)
+        # 결과 저장 (세션 스테이트 사용)
+        st.session_state['ml_prob'] = ml_prob
+        st.session_state['dl_prob'] = dl_prob
+
+# ── [5. 결과 출력 UI] ──
+with col_report:
+    st.markdown('<div class="sub-title">📊 추론 결과</div>', unsafe_allow_html=True)
+    if 'ml_prob' in st.session_state:
+        st.markdown(f'<div class="report-card"><div class="score-val" style="color: #4caf50;">{st.session_state.ml_prob:.1f}%</div> ML 예측</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="report-card"><div class="score-val" style="color: #2196f3;">{st.session_state.dl_prob:.1f}%</div> DL 예측</div>', unsafe_allow_html=True)
     else:
-        st.markdown("""
-        <div style="
-            background:#16202d;
-            border:1px dashed #2a3f5a;
-            border-radius:4px;
-            padding:60px 20px;
-            text-align:center;
-        ">
-            <p style="color:#4d7899;font-size:14px;margin:0;">
-                왼쪽에서 조건을 설정하고<br>예측하기 버튼을 누르세요
-            </p>
-        </div>
-        """, unsafe_allow_html=True) 
+        st.info("좌측 설정을 완료하고 버튼을 눌러주세요.")
