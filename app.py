@@ -1,334 +1,557 @@
-"""
-Steam Games — MLOps 대시보드 + 모델 서빙 (팀원 C 작업 베이스)
-MLflow 레지스트리의 champion 모델을 로드해 실시간 예측 제공.
+import base64
+from pathlib import Path
 
-실행: streamlit run app.py
-"""
-import json
-import sys
-
-import joblib
-import mlflow
-import numpy as np
-import pandas as pd
-import plotly.express as px
 import streamlit as st
-
-sys.path.insert(0, "src")
-
-st.set_page_config(page_title="Steam ML vs DL | MLOps", page_icon="🎮", layout="wide")
-mlflow.set_tracking_uri("sqlite:///mlflow.db")
-
-PAGES = ["1. 파이프라인 현황", "2. 실험 비교", "3. 모델 레지스트리",
-         "4. 실시간 예측 데모", "5. 숨은 명작 추천", "6. 장르 분석",
-         "7. 한계점 & 개선"]
-page = st.sidebar.radio("페이지", PAGES)
-st.sidebar.markdown("---")
-st.sidebar.caption("전처리 → 학습(MLflow) → champion 등록 → 서빙")
+from utils.preprocessing import load_data
 
 
-@st.cache_data
-def load_meta():
-    with open("data/processed/pipeline_meta.json", encoding="utf-8") as f:
-        return json.load(f)
+st.set_page_config(
+    page_title="Steam Analytics",
+    page_icon="🎮",
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
+
+HOME_URL = "/Home"
+
+df = load_data()
+
+genre_cols = [c for c in df.columns if c.startswith("genre_")]
+
+if "price" not in df.columns:
+    df["price"] = 0
+if "is_free" not in df.columns:
+    df["is_free"] = 0
+if "release_year" not in df.columns:
+    df["release_year"] = 0
+if "name" not in df.columns:
+    df["name"] = "Unknown Game"
+
+params = st.query_params
+view = params.get("view", "all")
+if isinstance(view, list):
+    view = view[0]
+
+filtered_df = df.copy()
+
+top_genre = "Unknown"
+top_count = 0
+
+if genre_cols:
+    genre_sum = df[genre_cols].sum().sort_values(ascending=False)
+    top_col = genre_sum.index[0]
+    top_genre = top_col.replace("genre_", "").replace("_", " ").title()
+    top_count = int(max(genre_sum.iloc[0], 0))
+
+view_title = "스팀의<br>게임데이터 분석"
+view_subtitle = "Steam 게임 시장 데이터를 기반으로 장르 · 가격 · 흥행 가능성을 분석합니다."
+view_badge = "STEAM ANALYTICS"
+feature_title = top_genre
+feature_desc = f"현재 데이터에서 가장 많이 등장한 장르는 {top_genre}입니다. 총 {top_count:,}개의 게임이 이 장르에 포함되어 있습니다."
+
+if view == "free":
+    filtered_df = df[df["is_free"] == 1].copy()
+    view_title = "무료 게임<br>데이터 분석"
+    view_subtitle = "무료 게임만 모아 시장 흐름과 장르 분포를 확인합니다."
+    view_badge = "FREE TO PLAY"
+    feature_title = "Free Games"
+    feature_desc = f"전체 데이터 중 무료 게임은 총 {len(filtered_df):,}개입니다."
+
+elif view == "paid":
+    filtered_df = df[df["is_free"] == 0].copy()
+    view_title = "유료 게임<br>데이터 분석"
+    view_subtitle = "유료 게임만 모아 가격과 장르 흐름을 확인합니다."
+    view_badge = "PAID GAMES"
+    feature_title = "Paid Games"
+    feature_desc = f"전체 데이터 중 유료 게임은 총 {len(filtered_df):,}개입니다."
+
+elif view == "genre":
+    view_title = "인기 장르<br>트렌드 분석"
+    view_subtitle = "데이터에서 가장 많이 등장한 장르와 장르별 흐름을 확인합니다."
+    view_badge = "POPULAR GENRES"
+    feature_title = top_genre
+    feature_desc = f"가장 많이 등장한 장르는 {top_genre}이며, 총 {top_count:,}개 게임이 포함되어 있습니다."
+
+elif view == "new":
+    max_year = int(df["release_year"].max())
+    filtered_df = df[df["release_year"] == max_year].copy()
+    view_title = "신작 게임<br>데이터 분석"
+    view_subtitle = f"{max_year}년에 출시된 게임만 모아 최신 흐름을 확인합니다."
+    view_badge = "NEW RELEASES"
+    feature_title = f"{max_year} New Releases"
+    feature_desc = f"{max_year}년에 출시된 게임은 총 {len(filtered_df):,}개입니다."
+
+current_count = len(filtered_df)
+current_avg_price = (
+    filtered_df[filtered_df["price"] > 0]["price"].mean()
+    if len(filtered_df[filtered_df["price"] > 0]) > 0
+    else 0
+)
+current_free = int(filtered_df["is_free"].sum()) if len(filtered_df) > 0 else 0
+current_paid = current_count - current_free
+
+sample_games = filtered_df["name"].dropna().astype(str).head(5).tolist()
+sample_text = " · ".join(sample_games) if sample_games else "대표 게임 데이터가 없습니다."
 
 
-@st.cache_data
-def load_comparison(task):
-    try:
-        with open(f"data/processed/comparison_{task}.json", encoding="utf-8") as f:
-            return pd.DataFrame(json.load(f))
-    except FileNotFoundError:
-        return None
+def image_to_base64(path: str) -> str:
+    image_path = Path(path)
+    if not image_path.exists():
+        return ""
+    return base64.b64encode(image_path.read_bytes()).decode("utf-8")
 
 
-@st.cache_resource
-def get_champion(task):
-    return mlflow.sklearn.load_model(f"models:/steam_{task}_predictor@champion")
+banner_base64 = image_to_base64("assets/banner.png")
 
-
-@st.cache_resource
-def get_scaler(task):
-    return joblib.load(f"data/processed/scaler_{task}.joblib")
-
-
-@st.cache_data
-def get_feature_names(task):
-    return pd.read_parquet(f"data/processed/X_test_{task}.parquet").columns.tolist()
-
-
-# ═════════ 1. 파이프라인 현황 ═════════
-if page == PAGES[0]:
-    st.title("🔧 파이프라인 현황")
-    meta = load_meta()
-    c1, c2, c3, c4 = st.columns(4)
-    c1.metric("모델링 데이터", f"{meta['rows_after_cleaning']:,}건")
-    c2.metric("피처 수", meta["final_feature_count"])
-    c3.metric("흥행 양성비", f"{meta['label_stats']['hit']['positive_ratio']*100:.1f}%")
-    c4.metric("숨은명작 양성비", f"{meta['label_stats']['hidden_gem']['positive_ratio']*100:.1f}%")
-
-    st.subheader("클리닝 단계별 제거 내역")
-    st.dataframe(pd.DataFrame(list(meta["cleaning_steps"].items()),
-                              columns=["단계", "건수"]),
-                 use_container_width=True, hide_index=True)
-
-    st.subheader("⚠️ Leakage 차단 컬럼 (출시 후 데이터)")
-    st.code(", ".join(meta["leakage_columns_dropped"]))
-    st.caption(f"라벨 생성에만 사용 후 물리 제거 | data_hash: {meta.get('data_hash')}")
-
-# ═════════ 2. 실험 비교 ═════════
-elif page == PAGES[1]:
-    st.title("📊 실험 비교 — ML vs DL")
-    task = st.selectbox("타스크", ["hidden_gem", "hit"],
-                        format_func=lambda x: "숨은 명작 탐지" if x == "hidden_gem" else "흥행 예측")
-    df = load_comparison(task)
-    if df is None:
-        st.warning("학습 미실행 — `python run_all.py` 먼저 실행하세요."); st.stop()
-
-    metric = "pr_auc" if task == "hidden_gem" else "f1"
-    st.caption(f"1차 비교 지표: **{metric.upper()}** "
-               + ("(불균형 데이터 → PR-AUC가 ROC-AUC보다 엄격)" if task == "hidden_gem" else ""))
-    num_cols = df.select_dtypes("number").columns
-    st.dataframe(df.style.background_gradient(
-        subset=[c for c in [metric, "f1"] if c in num_cols], cmap="Greens"),
-        use_container_width=True, hide_index=True)
-
-    fig = px.bar(df.sort_values(metric), x=metric, y="name", color="family",
-                 orientation="h", color_discrete_map={"ML": "#3498db", "DL": "#e74c3c"},
-                 title=f"모델별 {metric.upper()}")
-    st.plotly_chart(fig, use_container_width=True)
-
-    if task == "hidden_gem" and "f1@thr" in df.columns:
-        st.subheader("임계값 튜닝 효과 (기본 0.5 → 최적)")
-        m = df.melt(id_vars="name", value_vars=["f1", "f1@thr"],
-                    var_name="유형", value_name="F1")
-        fig = px.bar(m, x="name", y="F1", color="유형", barmode="group",
-                     color_discrete_map={"f1": "#95a5a6", "f1@thr": "#27ae60"})
-        st.plotly_chart(fig, use_container_width=True)
-        st.info("MLP_raw는 기본 임계값 0.5에서 F1=0 (양성 예측 전무) → "
-                "임계값 최적화만으로 0.37 회복. 불균형 데이터에서 임계값 튜닝의 중요성.")
-
-# ═════════ 3. 레지스트리 ═════════
-elif page == PAGES[2]:
-    st.title("📦 모델 레지스트리")
-    from mlflow.tracking import MlflowClient
-    client = MlflowClient()
-    for task, label in [("hidden_gem", "숨은 명작 탐지"), ("hit", "흥행 예측")]:
-        name = f"steam_{task}_predictor"
-        st.subheader(label)
-        try:
-            rows = []
-            for v in client.search_model_versions(f"name='{name}'"):
-                aliases = list(getattr(v, "aliases", []) or [])
-                rows.append({"version": v.version,
-                             "alias": ", ".join(aliases) or "-",
-                             "등록일": pd.Timestamp(v.creation_timestamp, unit="ms")
-                             .strftime("%m-%d %H:%M")})
-            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
-            st.caption(f"`mlflow.sklearn.load_model('models:/{name}@champion')`")
-        except Exception:
-            st.warning("등록된 모델 없음")
-
-# ═════════ 4. 예측 데모 ═════════
-elif page == PAGES[3]:
-    st.title("🎮 실시간 예측 데모")
-    task = st.radio("대상", ["hidden_gem", "hit"], horizontal=True,
-                    format_func=lambda x: "숨은 명작" if x == "hidden_gem" else "흥행")
-    try:
-        model = get_champion(task)
-        scaler = get_scaler(task)
-        feats = get_feature_names(task)
-    except Exception:
-        st.warning("champion 없음 — run_all.py 먼저 실행"); st.stop()
-
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        price = st.slider("가격 ($)", 0.0, 60.0, 9.99, 0.5)
-        ach = st.slider("업적 수", 0, 100, 20)
-        dlc = st.slider("DLC 수", 0, 10, 0)
-    with c2:
-        month = st.selectbox("출시 월", range(1, 13), index=5)
-        year = st.slider("출시 연도", 2015, 2025, 2024)
-        self_pub = st.checkbox("자체 퍼블리싱 (인디)", True)
-    with c3:
-        plats = st.multiselect("플랫폼", ["windows", "mac", "linux"], ["windows"])
-        genres = st.multiselect(
-            "장르", ["indie", "action", "casual", "adventure", "rpg",
-                    "strategy", "simulation"], ["indie"])
-
-    row = {c: 0.0 for c in feats}
-    row.update({"price": price, "log_price": np.log1p(price),
-                "is_free": int(price == 0), "n_achievements": ach, "n_dlc": dlc,
-                "release_year": year, "release_month": month,
-                "month_sin": np.sin(2 * np.pi * month / 12),
-                "month_cos": np.cos(2 * np.pi * month / 12),
-                "is_q4_release": int(month in (10, 11, 12)),
-                "n_platforms": len(plats),
-                "is_self_published": int(self_pub),
-                "n_genre": len(genres)})
-    for p in plats:
-        if p in row: row[p] = 1
-    for g in genres:
-        k = f"genre_{g}"
-        if k in row: row[k] = 1
-
-    X = pd.DataFrame([row])[feats]
-    Xs = pd.DataFrame(scaler.transform(X), columns=feats)
-    prob = float(model.predict_proba(Xs)[0, 1])
-    st.metric("숨은 명작 확률" if task == "hidden_gem" else "흥행 확률",
-              f"{prob*100:.1f}%")
-    st.progress(min(prob, 1.0))
-    st.caption(f"champion: {type(model).__name__} | "
-               f"registry: steam_{task}_predictor@champion")
-
-# ═════════ 숨은 명작 추천 ═════════
-elif page == PAGES[4]:
-    st.title("💎 숨은 명작 추천")
-
-    @st.cache_data
-    def load_recommend_data():
-        catalog = pd.read_parquet("data/processed/games_catalog.parquet")
-        X_all = pd.read_parquet("data/processed/X_all_hidden_gem.parquet")
-        return catalog, X_all
-
-    catalog, X_all = load_recommend_data()
-    model = get_champion("hidden_gem")
-
-    # 모델 점수 계산 (전체 게임, 캐싱)
-    @st.cache_data
-    def score_all():
-        return model.predict_proba(X_all)[:, 1]
-    catalog = catalog.copy()
-    catalog["gem_score"] = score_all()
-
-    # ── 필터 UI ──
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        sel_genres = st.multiselect(
-            "장르", ["Indie", "Action", "Adventure", "RPG", "Strategy",
-                    "Casual", "Simulation", "Puzzle"], ["Indie"])
-    with c2:
-        sel_plat = st.multiselect("플랫폼", ["windows", "mac", "linux"], ["windows"])
-    with c3:
-        max_price = st.slider("최대 가격 ($)", 0, 60, 20)
-
-    # ── 필터 적용 ──
-    mask = (catalog["price"] <= max_price)
-    for p in sel_plat:
-        mask &= (catalog[p] == 1)
-    if sel_genres:
-        genre_mask = catalog["genres"].apply(
-            lambda s: any(g in str(s) for g in sel_genres))
-        mask &= genre_mask
-    filtered = catalog[mask]
-
-    # ── 2층 추천 ──
-    tab1, tab2, tab3 = st.tabs(["✅ 확정 숨은 명작", "🔮 잠재 명작 (모델 발굴)",
-                                 "🚨 리뷰 패턴 이상"])
-
-    with tab1:
-        st.caption("긍정률 85%+ · owners 10만 미만 · 리뷰 30+ (검증된 명작)")
-        gems = (filtered[filtered["target_hidden_gem"] == 1]
-                .sort_values("wilson_lb", ascending=False).head(20))
-        st.dataframe(gems[["name", "price", "positive_ratio",
-                           "total_reviews_calc", "release_year"]]
-                     .rename(columns={"positive_ratio": "긍정률",
-                                      "total_reviews_calc": "리뷰수"}),
-                     use_container_width=True, hide_index=True)
-
-    with tab2:
-        st.caption("리뷰가 부족해 라벨을 못 받았지만 모델이 명작 패턴으로 판단한 게임")
-        latent = (filtered[(filtered["target_hidden_gem"] == 0)
-                           & (filtered["total_reviews_calc"] < 30)]
-                  .sort_values("gem_score", ascending=False).head(20))
-        st.dataframe(latent[["name", "price", "gem_score",
-                             "total_reviews_calc", "release_year"]]
-                     .rename(columns={"gem_score": "모델 점수",
-                                      "total_reviews_calc": "리뷰수"}),
-                     use_container_width=True, hide_index=True)
-        
-    with tab3:
-        st.caption("Isolation Forest가 탐지한 통계적 이상 패턴 — "
-                   "리뷰 폭격, 조작 의심, 데이터 오류 후보 (확정이 아닌 검토 대상)")
-        sus = (catalog[catalog["is_suspicious"] == 1]
-               .sort_values("anomaly_score", ascending=False).head(20))
-        st.dataframe(sus[["name", "total_reviews_calc", "positive_ratio",
-                          "anomaly_score", "price"]]
-                     .rename(columns={"total_reviews_calc": "리뷰수",
-                                      "positive_ratio": "긍정률",
-                                      "anomaly_score": "이상점수"}),
-                     use_container_width=True, hide_index=True)
-        st.info("실제 탐지 사례: Call of Duty MW II/III (긍정률 22~32% — 리뷰 폭격), "
-                "동일 게임 중복 등재 (데이터 오류). 이상 플래그 게임은 "
-                "숨은 명작 라벨에서 자동 제외됩니다.")
-        
-# ═════════ 장르 선호도 분석 ═════════
-elif page == PAGES[5]:
-    st.title("📊 장르별 수요·공급 분석")
-
-    @st.cache_data
-    def genre_stats():
-        catalog = pd.read_parquet("data/processed/games_catalog.parquet")
-        import ast
-        rows = []
-        for _, r in catalog.iterrows():
-            try:
-                genres = ast.literal_eval(str(r["genres"]))
-            except (ValueError, SyntaxError):
-                continue
-            for g in genres:
-                rows.append({"genre": g, "owners": r["owners_lower"],
-                             "reviews": r["total_reviews_calc"]})
-        gdf = pd.DataFrame(rows)
-        agg = gdf.groupby("genre").agg(
-            게임수=("genre", "size"),
-            총보유자=("owners", "sum"),
-            총리뷰=("reviews", "sum")).reset_index()
-        agg["게임당_평균보유자"] = agg["총보유자"] / agg["게임수"]
-        return agg.nlargest(12, "게임수")
-
-    agg = genre_stats()
-
-    c1, c2 = st.columns(2)
-    with c1:
-        fig = px.bar(agg.sort_values("총보유자"),
-                     x="총보유자", y="genre", orientation="h",
-                     title="장르별 총 보유자 수 (유저 선호도 proxy)")
-        st.plotly_chart(fig, use_container_width=True)
-    with c2:
-        fig = px.bar(agg.sort_values("게임수"),
-                     x="게임수", y="genre", orientation="h",
-                     title="장르별 게임 수 (공급)")
-        st.plotly_chart(fig, use_container_width=True)
-
-    # 핵심 인사이트: 게임당 평균 보유자 = 경쟁 대비 수요
-    fig = px.scatter(agg, x="게임수", y="게임당_평균보유자",
-                     text="genre", size="총보유자", log_y=True,
-                     title="공급 vs 게임당 수요 — 우상단=블루오션, 우하단=레드오션")
-    fig.update_traces(textposition="top center")
-    st.plotly_chart(fig, use_container_width=True)
-    st.info("Indie는 게임 수가 압도적이지만 게임당 평균 보유자는 낮음 → "
-            "전형적 레드오션. 발표에서 '숨은 명작이 Indie에 몰리는 이유'와 연결 가능.")
-
-# ═════════ 5. 한계점 ═════════
+if banner_base64:
+    hero_bg = f'''
+    background-image:
+        linear-gradient(90deg, rgba(3,8,18,0.92), rgba(3,8,18,0.48), rgba(3,8,18,0.10)),
+        url("data:image/png;base64,{banner_base64}");
+    '''
 else:
-    st.title("⚠️ 한계점 & 🚀 향후 개선")
-    c1, c2 = st.columns(2)
-    with c1:
-        st.subheader("한계점")
-        st.markdown("""
-- **리뷰 수 = 인기 proxy**: 실제 판매량 데이터 부재 (Boxleiter 추정에 의존)
-- **n_dlc leakage 가능성**: DLC는 출시 후 증가 — 부분적 미래정보 포함
-- **텍스트/이미지 부재**: 이 데이터셋엔 설명문이 없어 콘텐츠 신호 미활용
-- **리뷰 10개 미만 66% 제외**: 진짜 '완전히 묻힌' 게임은 분석 불가
-- **숨은 명작 라벨의 자의성**: 85%/30~500 기준은 합리적 추정일 뿐
-""")
-    with c2:
-        st.subheader("향후 개선")
-        st.markdown("""
-- Steam API로 설명문 수집 → 텍스트 임베딩 추가 (DL 강화)
-- SteamSpy owners 데이터 결합으로 라벨 정밀화
-- Optuna로 숨은 명작 모델도 자동 튜닝
-- GitHub Actions CI/CD + 드리프트 모니터링
-- 비용 민감 임계값 (큐레이션 노출 비용 반영)
-""")
+    hero_bg = '''
+    background-image:
+        linear-gradient(90deg, rgba(3,8,18,0.95), rgba(3,8,18,0.45)),
+        radial-gradient(circle at 75% 30%, rgba(255,110,40,0.48), transparent 26%),
+        radial-gradient(circle at 20% 80%, rgba(102,192,244,0.22), transparent 25%),
+        linear-gradient(135deg, #07111f, #143b66);
+    '''
+
+css = """
+<style>
+.stApp {
+    background:
+        radial-gradient(circle at 20% 0%, rgba(42, 71, 94, 0.45), transparent 28%),
+        radial-gradient(circle at 80% 10%, rgba(26, 159, 255, 0.18), transparent 24%),
+        linear-gradient(180deg, #0e141b 0%, #1b2838 42%, #0b1220 100%) !important;
+    color: #c7d5e0;
+}
+
+header, footer {
+    visibility: hidden;
+}
+
+.block-container {
+    padding-top: 0rem !important;
+    padding-left: 0rem !important;
+    padding-right: 0rem !important;
+    max-width: 100% !important;
+}
+
+.steam-top {
+    background: #171a21;
+    height: 72px;
+    display: flex;
+    align-items: center;
+    padding: 0 16%;
+    gap: 42px;
+}
+
+.logo {
+    font-size: 30px;
+    font-weight: 900;
+    color: #dcdedf !important;
+    letter-spacing: 4px;
+    font-family: Arial Black, Impact, sans-serif;
+    text-decoration: none !important;
+}
+
+.logo:hover {
+    color: #66c0f4 !important;
+}
+
+.menu {
+    display: flex;
+    align-items: center;
+    gap: 26px;
+}
+
+.menu a {
+    color: #dcdedf !important;
+    font-weight: 900;
+    font-size: 15px;
+    letter-spacing: 0.4px;
+    font-family: Arial Black, Impact, sans-serif;
+    text-decoration: none !important;
+}
+
+.menu a:hover {
+    color: #1a9fff !important;
+}
+
+.menu .active {
+    color: #1a9fff !important;
+    border-bottom: 2px solid #1a9fff;
+    padding-bottom: 5px;
+}
+
+.store-nav {
+    background: linear-gradient(90deg, #386fa8, #1b4f8f, #0e2f5a);
+    height: 48px;
+    width: 86%;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    padding: 0 18px;
+    gap: 22px;
+    box-shadow: 0 0 25px rgba(0,0,0,0.45);
+}
+
+.store-nav a {
+    color: white !important;
+    font-size: 13px;
+    font-weight: 900;
+    text-decoration: none !important;
+    font-family: Arial Black, Impact, sans-serif;
+}
+
+.store-nav a:hover {
+    color: #66c0f4 !important;
+}
+
+.store-nav .selected {
+    color: #66c0f4 !important;
+    border-bottom: 2px solid #66c0f4;
+}
+
+.hero {
+    width: 86%;
+    margin: 0 auto;
+    min-height: 570px;
+    __HERO_BG__
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    border: 1px solid rgba(102,192,244,0.35);
+    padding: 64px;
+    box-sizing: border-box;
+    position: relative;
+    overflow: hidden;
+}
+
+.hero::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background:
+        linear-gradient(180deg, rgba(0,0,0,0.08), rgba(0,0,0,0.35)),
+        radial-gradient(circle at 20% 50%, rgba(0,0,0,0.45), transparent 35%);
+    pointer-events: none;
+}
+
+.hero-inner {
+    position: relative;
+    z-index: 2;
+    max-width: 760px;
+}
+
+.badge {
+    display: inline-block;
+    background: rgba(0, 153, 255, 0.12);
+    border: 1px solid #1a9fff;
+    color: #1a9fff;
+    padding: 8px 16px;
+    font-size: 12px;
+    font-weight: 900;
+    letter-spacing: 2px;
+    border-radius: 3px;
+    margin-bottom: 24px;
+    font-family: Arial Black, Impact, sans-serif;
+}
+
+.hero-title {
+    color: white;
+    font-size: 68px;
+    font-weight: 1000;
+    line-height: 1.08;
+    margin-bottom: 22px;
+    font-family: Arial Black, Impact, sans-serif;
+    text-shadow:
+        0 0 10px rgba(0,0,0,1),
+        0 0 24px rgba(0,0,0,0.95),
+        0 0 48px rgba(0,0,0,0.85);
+}
+
+.hero-desc {
+    color: #e6f3ff;
+    font-size: 20px;
+    line-height: 1.7;
+    max-width: 760px;
+    text-shadow: 0 2px 12px rgba(0,0,0,0.95);
+}
+
+.hero-sample {
+    color: #8cbdd8;
+    margin-top: 20px;
+    font-size: 14px;
+    text-shadow: 0 2px 10px rgba(0,0,0,0.9);
+}
+
+.hero-buttons {
+    display: flex;
+    gap: 14px;
+    margin-top: 32px;
+}
+
+.hero-buttons a {
+    text-decoration: none !important;
+}
+
+.hero-btn {
+    padding: 14px 24px;
+    border-radius: 4px;
+    color: white;
+    font-weight: 900;
+    font-size: 14px;
+    font-family: Arial Black, Impact, sans-serif;
+    display: inline-block;
+}
+
+.hero-btn.green {
+    background: linear-gradient(90deg, #75b022, #588a1b);
+}
+
+.hero-btn.blue {
+    background: linear-gradient(90deg, #1a9fff, #0066cc);
+}
+
+.content {
+    width: 76%;
+    margin: 34px auto 80px auto;
+}
+
+.section-title {
+    color: white;
+    font-size: 23px;
+    font-weight: 900;
+    margin: 26px 0 16px 0;
+    font-family: Arial Black, Impact, sans-serif;
+}
+
+.feature-grid {
+    display: grid;
+    grid-template-columns: 1.45fr 1fr;
+    gap: 18px;
+}
+
+.feature-main {
+    min-height: 350px;
+    background:
+        linear-gradient(90deg, rgba(0,0,0,0.82), rgba(0,0,0,0.18)),
+        radial-gradient(circle at 70% 30%, rgba(102,192,244,0.20), transparent 30%),
+        linear-gradient(135deg, #0d141f, #213a55);
+    border: 1px solid rgba(102,192,244,0.18);
+    box-shadow: 0 18px 45px rgba(0,0,0,0.45);
+    padding: 34px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+}
+
+.feature-main h2 {
+    color: white;
+    font-size: 42px;
+    margin: 0 0 12px 0;
+    font-family: Arial Black, Impact, sans-serif;
+}
+
+.feature-main p {
+    color: #c7d5e0;
+    font-size: 17px;
+}
+
+.kpi-box {
+    background: linear-gradient(180deg, #1f3b57, #152434);
+    border: 1px solid rgba(102,192,244,0.22);
+    padding: 22px;
+}
+
+.kpi-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+}
+
+.kpi {
+    background: rgba(0,0,0,0.25);
+    border: 1px solid rgba(102,192,244,0.18);
+    padding: 18px;
+}
+
+.kpi-label {
+    color: #8f98a0;
+    font-size: 12px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+
+.kpi-value {
+    color: white;
+    font-size: 27px;
+    font-weight: 900;
+    margin-top: 6px;
+    font-family: Arial Black, Impact, sans-serif;
+}
+
+.card-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+}
+
+.card {
+    background: linear-gradient(180deg, #16202d, #101923);
+    border: 1px solid rgba(102,192,244,0.2);
+    padding: 24px;
+    min-height: 160px;
+    transition: 0.15s;
+}
+
+.card:hover {
+    transform: translateY(-4px);
+    border-color: #66c0f4;
+    box-shadow: 0 0 28px rgba(102,192,244,0.18);
+}
+
+.card h3 {
+    color: #66c0f4;
+    margin-top: 0;
+    font-family: Arial Black, Impact, sans-serif;
+}
+
+.card p {
+    color: #c7d5e0;
+    line-height: 1.6;
+}
+</style>
+"""
+
+css = css.replace("__HERO_BG__", hero_bg)
+st.markdown(css, unsafe_allow_html=True)
+
+st.markdown(
+    f"""
+<div class="steam-top">
+    <a href="{HOME_URL}" target="_self" class="logo">● STEAM</a>
+    <div class="menu">
+        <a class="active" href="{HOME_URL}" target="_self">STORE</a>
+        <a href="/장르분석" target="_self">GENRE</a>
+        <a href="/가격분석" target="_self">PRICE</a>
+        <a href="/예측모델" target="_self">PREDICTION</a>
+        <a href="/숨은명작" target="_self">HIDDEN GEM</a>
+        <a href="/게임검색" target="_self">SEARCH</a>
+    </div>
+</div>
+
+<div class="store-nav">
+    <a class="{'selected' if view == 'all' else ''}" href="{HOME_URL}?view=all" target="_self">전체 게임</a>
+    <a class="{'selected' if view == 'free' else ''}" href="{HOME_URL}?view=free" target="_self">무료 게임</a>
+    <a class="{'selected' if view == 'paid' else ''}" href="{HOME_URL}?view=paid" target="_self">유료 게임</a>
+    <a class="{'selected' if view == 'genre' else ''}" href="{HOME_URL}?view=genre" target="_self">인기 장르</a>
+    <a class="{'selected' if view == 'new' else ''}" href="{HOME_URL}?view=new" target="_self">신작 게임</a>
+</div>
+
+<div class="hero">
+    <div class="hero-inner">
+        <div class="badge">{view_badge}</div>
+        <div class="hero-title">{view_title}</div>
+        <div class="hero-desc">{view_subtitle}</div>
+        <div class="hero-sample">대표 데이터: {sample_text}</div>
+        <div class="hero-buttons">
+            <a href="/장르분석" target="_self"><div class="hero-btn green">대시보드 탐색</div></a>
+            <a href="/가격분석" target="_self"><div class="hero-btn blue">가격 트렌드 보기</div></a>
+        </div>
+    </div>
+</div>
+
+<div class="content">
+    <div class="section-title">Featured & Recommended</div>
+
+    <div class="feature-grid">
+        <div class="feature-main">
+            <h2>{feature_title}</h2>
+            <p>{feature_desc}</p>
+        </div>
+
+        <div class="kpi-box">
+            <div class="kpi-grid">
+                <div class="kpi">
+                    <div class="kpi-label">Selected Games</div>
+                    <div class="kpi-value">{current_count:,}</div>
+                </div>
+                <div class="kpi">
+                    <div class="kpi-label">Avg Price</div>
+                    <div class="kpi-value">${current_avg_price:.2f}</div>
+                </div>
+                <div class="kpi">
+                    <div class="kpi-label">Free Games</div>
+                    <div class="kpi-value">{current_free:,}</div>
+                </div>
+                <div class="kpi">
+                    <div class="kpi-label">Paid Games</div>
+                    <div class="kpi-value">{current_paid:,}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="section-title">Special Sections</div>
+
+    <div class="card-grid">
+        <a href="/장르분석" target="_self" style="text-decoration:none;">
+            <div class="card">
+                <h3>📈 Genre Analysis</h3>
+                <p>연도별 장르 변화와 인기 장르 순위를 확인합니다.</p>
+            </div>
+        </a>
+        <a href="/가격분석" target="_self" style="text-decoration:none;">
+            <div class="card">
+                <h3>💰 Price Analysis</h3>
+                <p>무료/유료 게임, 가격대, 장르별 평균 가격을 비교합니다.</p>
+            </div>
+        </a>
+        <a href="/예측모델" target="_self" style="text-decoration:none;">
+            <div class="card">
+                <h3>🏆 Success Prediction</h3>
+                <p>팀원이 만든 실시간 예측 기능과 연결될 예정입니다.</p>
+            </div>
+        </a>
+        <a href="/숨은명작" target="_self" style="text-decoration:none;">
+            <div class="card">
+                <h3>💎 Hidden Gem</h3>
+                <p>숨은 명작 게임을 탐지하고 추천합니다.</p>
+            </div>
+        </a>
+        <a href="/게임검색" target="_self" style="text-decoration:none;">
+            <div class="card">
+                <h3>🔍 Smart Search</h3>
+                <p>자연어로 게임을 검색합니다. ML vs DL 비교.</p>
+            </div>
+        </a>
+    </div>
+</div>
+""",
+    unsafe_allow_html=True
+)
+
+st.markdown('<div class="content">', unsafe_allow_html=True)
+
+search = st.text_input(
+    "게임 검색",
+    placeholder="🔍 Search games...",
+    label_visibility="collapsed"
+)
+
+if search:
+    result = df[df["name"].astype(str).str.contains(search, case=False, na=False)].copy()
+
+    st.subheader("검색 결과")
+
+    if len(result) > 0:
+        show_cols = [c for c in ["name", "release_year", "price", "is_free"] if c in result.columns]
+        st.dataframe(result[show_cols].head(20), use_container_width=True)
+    else:
+        st.warning("검색 결과가 없습니다.")
+
+st.markdown("</div>", unsafe_allow_html=True)
