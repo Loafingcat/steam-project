@@ -5,6 +5,11 @@
 
 ---
 
+## 0. 환경세팅
+
+uv init --python 3.12
+uv add pandas numpy scikit-learn pyyaml pyarrow joblib
+
 ## 1. 한눈에 보기
 
 | 항목 | 값 |
